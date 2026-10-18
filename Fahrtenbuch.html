@@ -1,0 +1,1498 @@
+```html
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AutoLog Pro – Intelligentes GPS-Fahrtenbuch</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono für Tacho-Zahlen -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        cockpit: {
+                            950: '#060911',
+                            900: '#0b111e',
+                            800: '#131c31',
+                            700: '#1e2942',
+                            accent: '#3b82f6',
+                            neon: '#00f2fe',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #060911;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+
+        /* Automotive Glassmorphism */
+        .glass-card {
+            background: rgba(19, 28, 49, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        .glass- header {
+            background: rgba(6, 9, 17, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .glass-nav {
+            background: rgba(11, 17, 30, 0.92);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Glowing effects */
+        .glow-blue {
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.35);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
+        }
+        .glow-red {
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #060911;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e2942;
+            border-radius: 9999px;
+        }
+
+        /* Pulse Animation for Recording */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .recording-dot {
+            animation: pulse-ring 2s infinite;
+        }
+
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(0.8);
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-28 select-none font-sans antialiased">
+
+    <!-- TOP STATUS HEADER -->
+    <header class="sticky top-0 z-40 glass-header px-4 py-3">
+        <div class="max-w-lg mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 border border-blue-400/30">
+                    <i data-lucide="compass" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-base font-bold tracking-tight text-white">AutoLog <span class="text-blue-400">Pro</span></h1>
+                        <span id="wakelock-badge" class="hidden px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md flex items-center gap-1" title="Display bleibt während der Fahrt aktiv">
+                            <i data-lucide="sun" class="w-3 h-3"></i> Wach
+                        </span>
+                    </div>
+                    <p id="schedule-status-text" class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <span id="schedule-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                        <span>Prüfe Zeitplan...</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- GPS Signal Badge -->
+            <div id="gps-badge" class="px-3 py-1.5 rounded-full bg-slate-800/90 border border-slate-700 flex items-center space-x-2 text-xs font-medium text-slate-300">
+                <span id="gps-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="gps- status-label">GPS Bereit</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-lg mx-auto px-4 pt-4 space-y-5">
+
+        <!-- ==========================================
+             TAB 1: DASHBOARD ( COCKPIT )
+             ========================================== -->
+        <section id="tab-dashboard" class="space-y-4">
+            
+            <!-- HERO TELEMETRY COCKPIT CARD -->
+            <div class="glass-card rounded-3xl p-5 relative overflow-hidden">
+                <!-- Background Ambient Glow when recording -->
+                <div id="cockpit-glow" class="absolute -top-24 -right-24 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl pointer-events-none transition-all duration-700"></div>
+
+                <!-- Top Row: Live Status & Odometer -->
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-3.5 mb-4">
+                    <div class="flex items-center space-x-2">
+                        <span id=" trip-state-indicator" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                        <span id="trip-state-text" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Standby</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[11px] text-slate-400 uppercase tracking-wider block">Aktueller Tacho</span>
+                        <button onclick="openOdometerModal()" class="font-mono text-base font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 ml-auto">
+                            <span id="live-odometer">169.713,0</span> <span class="text-xs font-normal text-slate-400">km</span>
+                            <i data-lucide="pen-line" class="w-3.5 h-3.5 text-slate-400 ml-0.5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Center: Speedometer & Distance Grid -->
+                <div class="grid grid-cols-2 gap-4 items-center my-2">
+                    <!-- Speed (km/h) -->
+                    <div class="bg-cockpit-950/70 border border-slate-800/80 rounded-2xl p-4 text-center relative">
+                        <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider block mb-1">Geschwindigkeit</span>
+                        <div class="flex items-baseline justify-center space-x-1">
+                            <span id="live-speed" class="font-mono text-4xl font-extrabold text-white tracking-tight">0</span>
+                            <span class="text-xs font-semibold text-slate-400">km/h</span>
+                        </div>
+                        <span id="gps-accuracy-text" class="text-[10px] text-slate-500 block mt-1">Genauigkeit: -- m</span>
+                    </div>
+
+                    <!-- Trip Distance (km) -->
+                    <div class="bg-cockpit-950/70 border border-slate-800/80 rounded-2xl p-4 text-center relative">
+                        <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider block mb-1">Gefahrene Strecke</span>
+                        <div class="flex items-baseline justify-center space-x-1">
+                            <span id="live-distance" class="font-mono text-4xl font-extrabold text-blue-400 tracking-tight">0.00</span>
+                            <span class="text-xs font-semibold text-slate-400">km</span>
+                        </div>
+                        <span id="live-duration" class="text-[10px] font-mono text-slate-400 block mt-1">Dauer: 00:00:00</span>
+                    </div>
+                </div>
+
+                <!-- Live Location / Address Bar -->
+                <div class="mt-3 bg-slate-900/60 border border-slate-800/70 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2.5 overflow-hidden">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-blue-400 shrink-0"></i>
+                        <span id="live-address" class="text-slate-300 truncate">Warte auf GPS-Position...</span>
+                    </div>
+                    <span id="auto-stop-countdown" class="hidden text-[11px] font-mono text-amber-400 shrink-0 ml-2">Stopp in 3:00</span>
+                </div>
+
+                <!-- Trip Category Quick Selector -->
+                <div class="mt-4">
+                    <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-2">Kategorie für aktuelle / nächste Fahrt</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" onclick="setTripCategory('Gewerblich')" id="cat-btn-Gewerblich" class="cat-select-btn py-2 px-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 bg-blue-600/20 border-blue-500 text-blue-300">
+                            <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Gewerblich
+                        </button>
+                        <button type="button" onclick="setTripCategory('Arbeitsweg')" id="cat-btn-Arbeitsweg" class="cat-select-btn py-2 px-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 bg-slate-800/60 border-slate-700 text-slate-400">
+                            <i data-lucide="building-2" class="w-3.5 h-3.5"></i> Arbeitsweg
+                        </button>
+                        <button type="button" onclick="setTripCategory('Privat')" id="cat-btn-Privat" class="cat-select-btn py-2 px-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 bg-slate-800/60 border-slate-700 text-slate-400">
+                            <i data-lucide="home" class="w-3.5 h-3.5"></i> Privat
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Optional Note Input -->
+                <div class="mt-3">
+                    <input type="text" id="live-trip-note" placeholder="Notiz / Zweck (z.B. Objektbetreuung, Einkauf)..." 
+                        class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors">
+                </div>
+
+                <!-- Primary Action Button (Start / Stop) -->
+                <div class="mt-4">
+                    <button id="main-record-btn" onclick="toggleRecordingManual()" class="w-full py-4 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] transition-all glow-blue flex items-center justify-center space-x-2.5">
+                        <i data-lucide="play" id="main-record-icon" class="w-5 h-5 fill-current"></i>
+                        <span id="main-record-text">Fahrt jetzt starten (Echt-GPS)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- AUTO-GPS & SCHEDULE CONTROL CARD -->
+            <div class="glass-card rounded-3xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                            <i data-lucide="satellite" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white"> vollautomatisches GPS-Tracking</h3>
+                            <p class="text-xs text-slate-400">Startet automatisch im Zeitfenster ab <span id=" Auto-speed-label">10</span> km/h</p>
+                        </div>
+                    </div>
+                    <!-- Toggle Switch -->
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="auto-gps-toggle" class="sr-only peer" onchange="toggleAutoGpsMode(this.checked)">
+                        <div class="w-12 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                </div>
+
+                <!-- Today's active window preview -->
+                <div class="bg-slate-900/70 rounded-2xl p-3 border border-slate-800/80 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="calendar-clock" class="w-4 h-4 text-blue-400"></i>
+                        <span class="text-slate-300">Heutiges Zeitfenster (<span id="today-name-label" class="font-semibold text-white">Mo</span>):</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span id="today-window-badge" class="font-mono font-semibold text-emerald-400">16:00 – 00:00</span>
+                        <button onclick="switchTab('schedule')" class="text-blue-400 hover:underline font-medium ml-1">Ändern</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUICK STATS OVERVIEW -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="glass-card rounded-2xl p-4">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-xs font-medium">Dieser Monat</span>
+                        <i data-lucide="calendar" class="w-4 h-4 text-blue-400"></i>
+                    </div>
+                    <p id="stat-month-km" class="font-mono text-xl font-bold text-white">0.0 km</p>
+                    <p id="stat-month-trips" class="text-[11px] text-slate-400 mt-0.5">0 Fahrten erfasst</p>
+                </div>
+
+                <div class="glass-card rounded-2xl p-4">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-xs font-medium">Gesamt erfasst</span>
+                        <i data-lucide="award" class="w-4 h-4 text-emerald-400"></i>
+                    </div>
+                    <p id="stat-total-km" class="font-mono text-xl font-bold text-white">0.0 km</p>
+                    <p id="stat-total-trips" class="text-[11px] text-slate-400 mt-0.5">0 Fahrten im Logbuch</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ==========================================
+             TAB 2: WOCHENZEITPLAN (MO - SO)
+             ========================================== -->
+        <section id="tab-schedule" class="hidden space-y-4">
+            <div class="glass-card rounded-3xl p-5">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="clock" class="w-5 h-5 text-blue-400"></i>
+                            Wochenzeitplan (Mo – So)
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Lege für jeden Wochentag fest, in welchem Zeitraum die automatische GPS-Aufzeichnung starten darf.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Master Schedule Lock Switch -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 mb-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-white block">Zeitplan-Sperre aktivieren</span>
+                        <span class="text-[11px] text-slate-400">Blockiert Auto-Start außerhalb der unten gesetzten Zeiten</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="schedule-master-enable" class="sr-only peer" onchange=" toggleScheduleMaster(this.checked)">
+                        <div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+
+                <!-- Quick Presets Bar -->
+                <div class="mb-4">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-2">Schnell-Vorlagen</span>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="applyStandardPreset()" class="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-xs font-semibold text-blue-300 flex items-center gap-1.5 transition-all">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            Standard (Mo-Do 16-00, Fr 12-00, WE)
+                        </button>
+                        <button onclick="copyMondayToThu()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 transition-all">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            Mo auf Di–Do kopieren
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 7-Day List Container -->
+                <div id="schedule-days-container" class="space-y-2.5">
+                    <!-- Dynamically populated by JS -->
+                </div>
+
+                <div class="mt-4 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-200 flex items-start space-x-2.5">
+                    <i data-lucide="info" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
+                    <span><strong>Hinweis zu 00:00 Uhr:</strong> Wenn du als Endzeit <code class="font-mono bg-blue-950 px-1 rounded">00:00</code> wählst, gilt das Zeitfenster bis Mitternacht (24:00 Uhr Ende des Tages). Manuelle Starts über den großen Button sind jederzeit möglich.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             TAB 3: FAHRTENBUCH & EXPORT
+             ========================================== -->
+        <section id="tab-logbook" class="hidden space-y-4">
+            
+            <!-- Filter & Export Header Card -->
+            <div class="glass-card rounded-3xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i data-lucide="book-open" class="w-5 h-5 text-blue-400"></i>
+                        Fahrtenbuch & Filter
+                    </h2>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openManualTripModal()" class="px-3 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 hover:bg-blue-600/30">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Nachtragen
+                        </button>
+                        <button onclick="exportCSV()" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 shadow-lg shadow-emerald-600/20">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Year, Month, Category Filters -->
+                <div class="grid grid-cols-3 gap-2">
+                    <select id="filter-year" onchange="renderLogbook()" class="bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                        <option value="all">Alle Jahre</option>
+                        <option value="2026" selected>2026</option>
+                        <option value="2025">2025</option>
+                    </select>
+
+                    <select id="filter-month" onchange="renderLogbook()" class="bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                        <option value="all">Alle Monate</option>
+                        <option value="0">Januar</option>
+                        <option value="1">Februar</option>
+                        <option value="2">März</option>
+                        <option value="3">April</option>
+                        <option value="4">Mai</option>
+                        <option value="5">Juni</option>
+                        <option value="6">Juli</option>
+                        <option value="7">August</option>
+                        <option value="8">September</option>
+                        <option value="9">Oktober</option>
+                        <option value="10">November</option>
+                        <option value="11">Dezember</option>
+                    </select>
+
+                    <select id="filter-category" onchange="renderLogbook()" class="bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                        <option value="all">Alle Kategorien</option>
+                        <option value="Gewerblich">Gewerblich</option>
+                        <option value="Arbeitsweg">Arbeitsweg</option>
+                        <option value="Privat">Privat</option>
+                    </select>
+                </div>
+
+                <!-- Summary Bar for filtered trips -->
+                <div class="bg-slate-950/80 border border-slate-800/80 rounded-2xl px-4 py-3 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Summe im Zeitraum:</span>
+                    <span id="filtered-sum-text" class="font-mono text-sm font-bold text-blue-400">0.0 km (0 Fahrten)</span>
+                </div>
+            </div>
+
+            <!-- Logbook Entries List -->
+            <div id="logbook-list" class="space-y-3">
+                <!-- Populated by JS -->
+            </div>
+
+        </section>
+
+        <!-- ==========================================
+             TAB 4: EINSTELLUNGEN & SYSTEM
+             ========================================== -->
+        <section id="tab-settings" class="hidden space-y-4">
+            
+            <!-- Odometer & Privacy Settings -->
+            <div class="glass-card rounded-3xl p-5 space-y-4">
+                <h2 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="Sliders" class="w-5 h-5 text-blue-400"></i>
+                    Fahrzeug & Anzeige-Optionen
+                </h2>
+
+                <!-- Starting Odometer -->
+                <div>
+                    <label class="text-xs font-medium text-slate-300 block mb-1.5">Aktueller Kilometerstand (Tacho in km)</label>
+                    <div class="flex space-x-2">
+                        <input type="number" step="0.1" id="settings-odometer-input" 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-blue-500">
+                        <button onclick="saveOdometerFromSettings()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shrink-0">
+                            Speichern
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hide Times in Logbook -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <div>
+                        <span class="text-xs font-semibold text-white block">Uhrzeiten im Fahrtenbuch ausblenden</span>
+                        <span class="text-[11px] text-slate-400">Zeigt in der Liste & im CSV-Export nur das Datum ohne Uhrzeit</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="settings-hide-time" class="sr-only peer" onchange="updatePrivacySetting(this.checked)">
+                        <div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+
+                <!-- Auto-Start Speed Threshold -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <div>
+                        <span class="text-xs font-semibold text-white block">Auto-Start Geschwindigkeit</span>
+                        <span class="text-[11px] text-slate-400">Ab wie viel km/h soll GPS automatisch aufzeichnen?</span>
+                    </div>
+                    <select id="settings-speed-threshold" onchange="updateGpsParams()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono">
+                        <option value="5">5 km/h</option>
+                        <option value="10" selected>10 km/h</option>
+                        <option value="15">15 km/h</option>
+                        <option value="20">20 km/h</option>
+                    </select>
+                </div>
+
+                <!-- Auto-Stop Idle Time -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <div>
+                        <span class="text-xs font-semibold text-white block">Auto-Stopp bei Stillstand</span>
+                        <span class="text-[11px] text-slate-400">Beendet die Fahrt automatisch nach Pause</span>
+                    </div>
+                    <select id="settings-stop-timeout" onchange="updateGpsParams()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono">
+                        <option value="120">2 Min.</option>
+                        <option value="180" selected>3 Min.</option>
+                        <option value="300">5 Min.</option>
+                        <option value="600">10 Min.</option>
+                        <option value="0">Aus (Manuell)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- App Download & Backup Card -->
+            <div class="glass-card rounded-3xl p-5 space-y-3">
+                <h2 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="smartphone" class="w-5 h-5 text-emerald-400"></i>
+                    App speichern & Datensicherung
+                </h2>
+                <p class="text-xs text-slate-400">
+                    Du kannst diese Datei direkt als <code class="text-emerald-300">Fahrtenbuch.html</code> auf dein Smartphone herunterladen, ohne Texteditor!
+                </p>
+
+                <button onclick="downloadSelfAsHtml()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20">
+                    <i data-lucide="download-cloud" class="w-4 h-4"></i>
+                    Fahrtenbuch.html direkt herunterladen
+                </button>
+
+                <div class="grid grid-cols-2 gap-2 pt-2">
+                    <button onclick="exportBackupJson()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 flex items-center justify-center gap-1.5">
+                        <i data-lucide="hard-drive-download" class="w-4 h-4 text-blue-400"></i> Backup speichern
+                    </button>
+                    <label class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="hard-drive-upload" class="w-4 h-4 text-amber-400"></i> Backup laden
+                        <input type="file" accept=".json" class="hidden" onchange="importBackupJson(event)">
+                    </label>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800/80 flex justify-between items-center">
+                    <button onclick="clearAllTripsConfirm()" class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Alle Fahrten zurücksetzen
+                    </button>
+                    <span class="text-[11px] text-slate-500">v2.5 Pro (Echt-GPS)</span>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- ==========================================
+         BOTTOM NAVIGATION BAR (MOBILE FIRST)
+         ========================================== -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 glass-nav px-4 py-2">
+        <div class="max-w-lg mx-auto grid grid-cols-4 gap-1">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-blue-400 bg-blue-500/10 transition-all">
+                <i data-lucide="gauge" class="w-5 h-5 mb-1"></i>
+                <span class="text-[11px] font-semibold">Cockpit</span>
+            </button>
+            <button onclick="switchTab('schedule')" id="nav-schedule" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition-all">
+                <i data-lucide="calendar-clock" class="w-5 h-5 mb-1"></i>
+                <span class="text-[11px] font-medium">Zeitplan</span>
+            </button>
+            <button onclick="switchTab('logbook')" id="nav-logbook" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition-all">
+                <i data-lucide="list-checks" class="w-5 h-5 mb-1"></i>
+                <span class="text-[11px] font-medium">Fahrtenbuch</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition-all">
+                <i data-lucide="settings" class="w-5 h-5 mb-1"></i>
+                <span class="text-[11px] font-medium">Optionen</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ==========================================
+         MODAL: MANUAL TRIP / EDIT ODOMETER
+         ========================================== -->
+    <div id="manual-trip-modal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-card rounded-3xl max-w-md w-full p-5 space-y-4 border border-slate-700">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-white">Fahrt manuell nachtragen</h3>
+                <button onclick="closeManualTripModal()" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Datum</label>
+                        <input type="date" id="manual-date" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Kategorie</label>
+                        <select id="manual-category" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <option value="Gewerblich">Gewerblich</option>
+                            <option value="Arbeitsweg">Arbeitsweg</option>
+                            <option value="Privat">Privat</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Startzeit</label>
+                        <input type="time" id="manual-start-time" value="16:30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Endzeit</label>
+                        <input type="time" id="manual-end-time" value="17:15" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Gefahrene Distanz (km)</label>
+                    <input type="number" step="0.1" id="manual-distance" placeholder="z.B. 14.5" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Start -> Ziel / Notiz</label>
+                    <input type="text" id="manual-note" placeholder="z.B. Objektbetreuung Wenden" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button onclick="closeManualTripModal()" class="w-1/2 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Abbrechen</button>
+                <button onclick="saveManualTrip()" class="w-1/2 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold">Eintragen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-[-10px]">
+        <div class="px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl flex items-center space-x-2.5 text-xs font-medium text-white">
+            <span id="toast-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span id="toast-text">Gespeichert</span>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         APPLICATION LOGIC (JAVASCRIPT)
+         ========================================== -->
+    <script>
+        // --- 1. DEFAULT STATE & STORAGE KEYS ---
+        const STORAGE_KEY = 'autolog_pro_v2_state';
+
+        const DAY_NAMES = [
+            { id: 1, short: 'Mo', full: 'Montag' },
+            { id: 2, short: 'Di', full: 'Dienstag' },
+            { id: 3, short: 'Mi', full: 'Mittwoch' },
+            { id: 4, short: 'Do', full: 'Donnerstag' },
+            { id: 5, short: 'Fr', full: 'Freitag' },
+            { id: 6, short: 'Sa', full: 'Samstag' },
+            { id: 0, short: 'So', full: 'Sonntag' }
+        ];
+
+        const defaultSchedule = {
+            1: { active: true, start: '16:00', end: '00:00' }, // Montag
+            2: { active: true, start: '16:00', end: '00:00' }, // Dienstag
+            3: { active: true, start: '16:00', end: '00:00' }, // Mittwoch
+            4: { active: true, start: '16:00', end: '00:00' }, // Donnerstag
+            5: { active: true, start: '12:00', end: '00:00' }, // Freitag
+            6: { active: true, start: '08:00', end: '00:00' }, // Samstag
+            0: { active: true, start: '08:00', end: '00:00' }  // Sonntag
+        };
+
+        let appState = {
+            odometer: 169713.0,
+            autoGpsEnabled: false,
+            scheduleMasterEnabled: true,
+            hideTimesInLog: false,
+            speedThresholdKmh: 10,
+            autoStopTimeoutSec: 180,
+            selectedCategory: 'Gewerblich',
+            schedule: JSON.parse(JSON.stringify(defaultSchedule)),
+            trips: []
+        };
+
+        // --- 2. RUNTIME TELEMETRY STATE (REAL GPS ONLY) ---
+        let isRecording = false;
+        let geoWatchId = null;
+        let wakeLockSentinel = null;
+        let currentTrip = null;
+        let durationTimerInterval = null;
+        let lastMovementTimestamp = null;
+        let currentSpeedKmh = 0;
+
+        // Load state from localStorage
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    appState = { ...appState, ...parsed };
+                    if (!parsed.schedule) appState.schedule = JSON.parse(JSON.stringify(defaultSchedule));
+                }
+            } catch (e) {
+                console.error('Fehler beim Laden des Speichers:', e);
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+                updateDashboardUI();
+            } catch (e) {
+                console.error('Fehler beim Speichern:', e);
+            }
+        }
+
+        // --- 3. WEEKLY SCHEDULE ENGINE (MO - SO) ---
+        function isCurrentTimeInSchedule() {
+            if (!appState.scheduleMasterEnabled) return { allowed: true, reason: 'Zeitplan-Sperre deaktiviert (Immer aktiv)' };
+
+            const now = new Date();
+            const dayIndex = now.getDay(); // 0 = Sun, 1 = Mon, ...
+            const dayCfg = appState.schedule[dayIndex];
+            const dayMeta = DAY_NAMES.find(d => d.id === dayIndex);
+
+            if (!dayCfg || !dayCfg.active) {
+                return { allowed: false, reason: `${dayMeta.full} ist im Zeitplan deaktiviert` };
+            }
+
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const [startH, startM] = dayCfg.start.split(':').map(Number);
+            const [endH, endM] = dayCfg.end.split(':').map(Number);
+
+            const startMinutes = startH * 60 + startM;
+            // Handle 00:00 as 24:00 (1440 minutes)
+            const endMinutes = (endH === 0 && endM === 0) ? 1440 : (endH * 60 + endM);
+
+            let inside = false;
+            if (endMinutes >= startMinutes) {
+                inside = nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+            } else {
+                // Overnight window (e.g. 22:00 to 04:00)
+                inside = nowMinutes >= startMinutes || nowMinutes <= endMinutes;
+            }
+
+            if (inside) {
+                return { allowed: true, reason: `Zeitfenster aktiv (${dayMeta.short} ${dayCfg.start}–${dayCfg.end})` };
+            } else {
+                return { allowed: false, reason: `Außerhalb Zeitfenster (${dayMeta.short} erst ab ${dayCfg.start})` };
+            }
+        }
+
+        function renderScheduleConfig() {
+            const container = document.getElementById('schedule-days-container');
+            if (!container) return;
+            const todayIndex = new Date().getDay();
+
+            container.innerHTML = DAY_NAMES.map(day => {
+                const cfg = appState.schedule[day.id] || { active: false, start: '16:00', end: '00:00' };
+                const isToday = day.id === todayIndex;
+
+                return `
+                <div class="p-3.5 rounded-2xl border transition-all ${cfg.active ? 'bg-slate-900/90 border-slate-700/80' : 'bg-slate-950/40 border-slate-800/40 opacity-60'} ${isToday ? 'ring-1 ring-blue-500/50' : ''}">
+                    <div class="flex items-center justify-between mb-2.5">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${cfg.active ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}">
+                                ${day.short}
+                            </span>
+                            <div>
+                                <span class="text-sm font-bold text-white">${day.full}</span>
+                                ${isToday ? '<span class="ml-2 px-1.5 py-0.5 text-[10px] font-semibold bg-blue-500/20 text-blue-300 rounded">Heute</span>' : ''}
+                            </div>
+                        </div>
+
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" ${cfg.active ? 'checked' : ''} onchange="updateDaySchedule(${day.id}, 'active', this.checked)" class="sr-only peer">
+                            <div class="w-10 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5 ${cfg.active ? '' : 'pointer-events-none'}">
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                            <span class="text-[11px] text-slate-400">Von:</span>
+                            <input type="time" value="${cfg.start}" onchange="updateDaySchedule(${day.id}, 'start', this.value)" 
+                                class="bg-transparent font-mono text-xs font-bold text-white focus:outline-none">
+                        </div>
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                            <span class="text-[11px] text-slate-400">Bis:</span>
+                            <input type="time" value="${cfg.end}" onchange="updateDaySchedule(${day.id}, 'end', this.value)" 
+                                class="bg-transparent font-mono text-xs font-bold text-white focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function updateDaySchedule(dayId, field, value) {
+            if (!appState.schedule[dayId]) {
+                appState.schedule[dayId] = { active: true, start: '16:00', end: '00:00' };
+            }
+            appState.schedule[dayId][field] = value;
+            saveState();
+            renderScheduleConfig();
+            showToast('Zeitplan aktualisiert');
+        }
+
+        function applyStandardPreset() {
+            appState.schedule = JSON.parse(JSON.stringify(defaultSchedule));
+            saveState();
+            renderScheduleConfig();
+            showToast('Standard-Zeitplan (Mo-Do 16-00, Fr 12-00) geladen');
+        }
+
+        function copyMondayToThu() {
+            const mon = appState.schedule[1];
+            [2, 3, 4].forEach(d => {
+                appState.schedule[d] = { ...mon };
+            });
+            saveState();
+            renderScheduleConfig();
+            showToast('Montag auf Di–Do übertragen');
+        }
+
+        function toggleScheduleMaster(enabled) {
+            appState.scheduleMasterEnabled = enabled;
+            saveState();
+            showToast(enabled ? 'Zeitplan-Sperre aktiviert' : 'Zeitplan-Sperre deaktiviert');
+        }
+
+        // --- 4. REAL GPS TRACKING & HAVERSINE FORMULA ---
+        function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLockSentinel = await navigator.wakeLock.request('screen');
+                    document.getElementById('wakelock-badge').classList.remove('hidden');
+                } catch (e) {
+                    console.log('WakeLock nicht verfügbar:', e);
+                }
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLockSentinel) {
+                wakeLockSentinel.release().catch(() => {});
+                wakeLockSentinel = null;
+            }
+            document.getElementById('wakelock-badge').classList.add('hidden');
+        }
+
+        // Reverse Geocoding (OpenStreetMap Nominatim) to get street/city name
+        async function fetchAddressFromCoords(lat, lon) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=16&addressdetails=1`, {
+                    headers: { 'Accept-Language': 'de' }
+                });
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (data && data.address) {
+                    const road = data.address.road || data.address.pedestrian || '';
+                    const house = data.address.house_number || '';
+                    const city = data.address.city || data.address.town || data.address.village || '';
+                    const parts = [`${road} ${house}`.trim(), city].filter(Boolean);
+                    return parts.join(', ') || data.display_name.split(',').slice(0, 2).join(',');
+                }
+            } catch (e) {
+                return null;
+            }
+            return null;
+        }
+
+        function startGpsWatcher() {
+            if (!('geolocation' in navigator)) {
+                showToast('GPS wird von diesem Browser nicht unterstützt', true);
+                return;
+            }
+            if (geoWatchId !== null) return;
+
+            setGpsBadgeState('searching', 'Suche GPS...');
+
+            geoWatchId = navigator.geolocation.watchPosition(
+                 onGpsPosition,
+                onGpsError,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 2000,
+                    timeout: 15000
+                }
+            );
+        }
+
+        function stopGpsWatcherIfIdle() {
+            if (!isRecording && !appState.autoGpsEnabled && geoWatchId !== null) {
+                navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = null;
+                setGpsBadgeState('idle', 'GPS Bereit');
+            }
+        }
+
+        async function onGpsPosition(pos) {
+            const { latitude, longitude, accuracy, speed } = pos.coords;
+            const now = Date.now();
+
+            // Update accuracy UI
+            document.getElementById('gps-accuracy-text').textContent = `Genauigkeit: ±${Math.round(accuracy)} m`;
+            setGpsBadgeState('locked', `GPS Aktiv (±${Math.round(accuracy)}m)`);
+
+            // Calculate speed in km/h
+            if (speed !== null && speed >= 0) {
+                currentSpeedKmh = Math.round(speed * 3.6);
+            } else if (currentTrip && currentTrip.lastLat !== null) {
+                const dtHours = (now - currentTrip.lastCoordTime) / 3600000;
+                const distKm = calculateHaversineKm(currentTrip.lastLat, currentTrip.lastLon, latitude, longitude);
+                if (dtHours > 0 && distKm < 0.5) {
+                    currentSpeedKmh = Math.round(distKm / dtHours);
+                }
+            }
+
+            // Filter out tiny GPS drift when stationary (< 3 km/h)
+            if (currentSpeedKmh < 3) currentSpeedKmh = 0;
+            document.getElementById('live-speed').textContent = currentSpeedKmh;
+
+            // Update live coordinates display if no address yet
+            const addrEl = document.getElementById('live-address');
+            if (addrEl.textContent.includes('Warte auf GPS')) {
+                addrEl.textContent = `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+                fetchAddressFromCoords(latitude, longitude).then(addr => {
+                    if (addr) addrEl.textContent = addr;
+                });
+            }
+
+            // Check Auto-Start Condition
+            if (!isRecording && appState.autoGpsEnabled) {
+                const sched = isCurrentTimeInSchedule();
+                if (sched.allowed && currentSpeedKmh >= appState.speedThresholdKmh && accuracy <= 50) {
+                    startTripRecording('Auto-GPS Start', latitude, longitude);
+                }
+            }
+
+            // If currently recording a trip, accumulate real distance
+            if (isRecording && currentTrip) {
+                // Only accept coordinates with reasonable accuracy (< 65m)
+                if (accuracy <= 65) {
+                    if (currentTrip.lastLat !== null && currentTrip.lastLon !== null) {
+                        const stepKm = calculateHaversineKm(currentTrip.lastLat, currentTrip.lastLon, latitude, longitude);
+                        const stepMeters = stepKm * 1000;
+
+                        // Noise filter: movement must be at least 10 meters and realistic
+                        if (stepMeters >= 10 && (currentSpeedKmh >= 3 || stepMeters > accuracy * 0.6)) {
+                            currentTrip.distanceKm += stepKm;
+                            currentTrip.lastLat = latitude;
+                            currentTrip.lastLon = longitude;
+                            currentTrip.lastCoordTime = now;
+                            lastMovementTimestamp = now;
+
+                            // Update live odometer & distance display
+                            updateLiveTelemetryNumbers();
+                        }
+                    } else {
+                        // First valid coordinate of trip
+                        currentTrip.lastLat = latitude;
+                        currentTrip.lastLon = longitude;
+                        currentTrip.lastCoordTime = now;
+                        lastMovementTimestamp = now;
+
+                        const startAddr = await fetchAddressFromCoords(latitude, longitude);
+                        if (startAddr) {
+                            currentTrip.startAddress = startAddr;
+                            document.getElementById('live-address').textContent = `Start: ${startAddr}`;
+                        }
+                    }
+                }
+
+                // Track movement for Auto-Stop
+                if (currentSpeedKmh >= 4) {
+                    lastMovementTimestamp = now;
+                }
+            }
+        }
+
+        function onGpsError(err) {
+            console.warn('GPS Warnung:', err.message);
+            setGpsBadgeState('error', 'GPS Signal schwach');
+        }
+
+        function setGpsBadgeState(state, text) {
+            const dot = document.getElementById('gps-dot');
+            const label = document.getElementById('gps-status-label');
+            if (label) label.textContent = text;
+            if (!dot) return;
+
+            dot.className = 'w-2 h-2 rounded-full ';
+            if (state === 'locked') dot.className += 'bg-emerald-400 recording-dot';
+            else if (state === 'searching') dot.className += 'bg-amber-400 animate-pulse';
+            else if (state === 'error') dot.className += 'bg-red-500';
+            else dot.className += 'bg-slate-500';
+        }
+
+        // --- 5. START / STOP RECORDING LOGIC ---
+        function toggleRecordingManual() {
+            if (isRecording) {
+                stopTripRecording('Manuell beendet');
+            } else {
+                startTripRecording('Manueller Start');
+            }
+        }
+
+        async function startTripRecording(triggerSource = 'Manuell', initLat = null, initLon = null) {
+            if (isRecording) return;
+
+            isRecording = true;
+            lastMovementTimestamp = Date.now();
+            const now = new Date();
+
+            currentTrip = {
+                id: 'trip_' + Date.now(),
+                startTimeMs: now.getTime(),
+                dateStr: now.toISOString().split('T')[0],
+                startTimeStr: now.toTimeString().slice(0, 5),
+                startOdometer: appState.odometer,
+                distanceKm: 0.0,
+                category: appState.selectedCategory,
+                note: document.getElementById('live-trip-note').value.trim(),
+                trigger: triggerSource,
+                startAddress: 'GPS-Position',
+                endAddress: '',
+                lastLat: initLat,
+                lastLon: initLon,
+                lastCoordTime: Date.now()
+            };
+
+            startGpsWatcher();
+            requestWakeLock();
+
+            // Start 1-second timer for duration & auto-stop check
+            if (durationTimerInterval) clearInterval(durationTimerInterval);
+            durationTimerInterval = setInterval(onRecordingTick, 1000);
+
+            updateRecordingButtonUI();
+            showToast(`Aufzeichnung gestartet (${triggerSource})`);
+        }
+
+        async function stopTripRecording(reason = 'Beendet') {
+            if (!isRecording || !currentTrip) return;
+
+            isRecording = false;
+             if (durationTimerInterval) {
+                clearInterval(durationTimerInterval);
+                durationTimerInterval = null;
+            }
+
+            const now = new Date();
+            const endTimeStr = now.toTimeString().slice(0, 5);
+            const finalDist = Math.round(currentTrip.distanceKm * 100) / 100;
+
+            // Fetch end address if coordinates exist
+            if (currentTrip.lastLat && currentTrip.lastLon) {
+                const endAddr = await fetchAddressFromCoords(currentTrip.lastLat, currentTrip.lastLon);
+                if (endAddr) currentTrip.endAddress = endAddr;
+            }
+
+            const endOdo = Math.round((currentTrip.startOdometer + finalDist) * 10) / 10;
+            const userNote = document.getElementById('live-trip-note').value.trim();
+
+            const routeText = currentTrip.startAddress && currentTrip.endAddress 
+                ? `${currentTrip.startAddress} → ${currentTrip.endAddress}`
+                : (currentTrip.startAddress || 'GPS-Aufzeichnung');
+
+            const newEntry = {
+                id: currentTrip.id,
+                date: currentTrip.dateStr,
+                startTime: currentTrip.startTimeStr,
+                endTime: endTimeStr,
+                startOdo: Math.round(currentTrip.startOdometer * 10) / 10,
+                endOdo: endOdo,
+                distance: finalDist,
+                category: appState.selectedCategory,
+                note: userNote || routeText
+            };
+
+            appState.odometer = endOdo;
+            appState.trips.unshift(newEntry);
+            document.getElementById('live-trip-note').value = '';
+            currentTrip = null;
+            currentSpeedKmh = 0;
+
+            saveState();
+            renderLogbook();
+            updateRecordingButtonUI();
+            stopGpsWatcherIfIdle();
+            if (!appState.autoGpsEnabled) releaseWakeLock();
+
+            showToast(`Fahrt gespeichert (+${finalDist.toFixed(2)} km)`);
+        }
+
+        function onRecordingTick() {
+            if (!isRecording || !currentTrip) return;
+
+            const now = Date.now();
+            const elapsedSec = Math.floor((now - currentTrip.startTimeMs) / 1000);
+            const hrs = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
+            const mins = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
+            const secs = String(elapsedSec % 60).padStart(2, '0');
+
+            document.getElementById('live-duration').textContent = `Dauer: ${hrs}:${mins}:${secs}`;
+
+            // Check Auto-Stop on idle
+            const stopTimeout = Number(appState.autoStopTimeoutSec);
+            const countdownEl = document.getElementById('auto-stop-countdown');
+
+            if (stopTimeout > 0 && lastMovementTimestamp) {
+                const idleSec = Math.floor((now - lastMovementTimestamp) / 1000);
+                if (idleSec >= 15 && currentSpeedKmh === 0) {
+                    const remaining = Math.max(0, stopTimeout - idleSec);
+                    const rMin = Math.floor(remaining / 60);
+                    const rSec = String(remaining % 60).padStart(2, '0');
+                    countdownEl.textContent = `Auto-Stopp in ${rMin}:${rSec}`;
+                    countdownEl.classList.remove('hidden');
+
+                    if (remaining <= 0) {
+                        stopTripRecording('Auto-Stopp (Stillstand)');
+                    }
+                } else {
+                    countdownEl.classList.add('hidden');
+                }
+            } else {
+                countdownEl.classList.add('hidden');
+            }
+        }
+
+        function updateLiveTelemetryNumbers() {
+            const dist = currentTrip ? currentTrip.distanceKm : 0;
+            const liveOdo = (currentTrip ? currentTrip.startOdometer : appState.odometer) + dist;
+
+            document.getElementById('live-distance').textContent = dist.toFixed(2);
+            document.getElementById('live-odometer').textContent = liveOdo.toLocaleString('de-DE', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            });
+        }
+
+        function updateRecordingButtonUI() {
+            const btn = document.getElementById('main-record-btn');
+            const text = document.getElementById('main-record-text');
+            const stateDot = document.getElementById('trip-state-indicator');
+            const stateText = document.getElementById('trip-state-text');
+            const glow = document.getElementById('cockpit-glow');
+
+            if (isRecording) {
+                btn.className = 'w-full py-4 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-[0.99] transition-all glow-red flex items-center justify-center space-x-2.5';
+                text.textContent = 'Fahrt beenden & speichern';
+                stateDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 recording-dot';
+                stateText.textContent = 'Aufzeichnung läuft (Echt-GPS)';
+                stateText.className = 'text-xs font-bold uppercase tracking-wider text-emerald-400';
+                glow.className = 'absolute -top-24 -right-24 w-56 h-56 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none transition-all duration-700';
+            } else {
+                btn.className = 'w-full py-4 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] transition-all glow-blue flex items-center justify-center space-x-2.5';
+                text.textContent = 'Fahrt jetzt starten (Echt-GPS)';
+                stateDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
+                stateText.textContent = appState.autoGpsEnabled ? 'Auto-GPS Bereitschaft' : 'Standby';
+                stateText.className = 'text-xs font-semibold uppercase tracking-wider text-slate-400';
+                glow.className = 'absolute -top-24 -right-24 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl pointer-events-none transition-all duration-700';
+                document.getElementById('live-distance').textContent = '0.00';
+                document.getElementById('live-duration').textContent = 'Dauer: 00:00:00';
+                document.getElementById('live-speed').textContent = '0';
+                document.getElementById('auto-stop-countdown').classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function toggleAutoGpsMode(enabled) {
+            appState.autoGpsEnabled = enabled;
+            saveState();
+
+            if (enabled) {
+                startGpsWatcher();
+                requestWakeLock();
+                showToast('Auto-GPS Überwachung aktiviert');
+            } else {
+                stopGpsWatcherIfIdle();
+                if (!isRecording) releaseWakeLock();
+                showToast('Auto-GPS deaktiviert');
+            }
+            updateRecordingButtonUI();
+        }
+
+        // --- 6. LOGBOOK & FILTERING ---
+        function renderLogbook() {
+            const listEl = document.getElementById('logbook-list');
+            if (!listEl) return;
+
+            const yearFilter = document.getElementById('filter-year').value;
+            const monthFilter = document.getElementById('filter-month').value;
+            const catFilter = document.getElementById('filter-category').value;
+
+            const filtered = appState.trips.filter(t => {
+                const d = new Date(t.date);
+                if (yearFilter !== 'all' && String(d.getFullYear()) !== yearFilter) return false;
+                if (monthFilter !== 'all' && String(d.getMonth()) !== monthFilter) return false;
+                if (catFilter !== 'all' && t.category !== catFilter) return false;
+                return true;
+            });
+
+            const totalFilteredKm = filtered.reduce((acc, item) => acc + (Number(item.distance) || 0), 0);
+            document.getElementById('filtered-sum-text').textContent = 
+                `${totalFilteredKm.toFixed(1)} km (${filtered.length} ${filtered.length === 1 ? 'Fahrt' : 'Fahrten'})`;
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="glass-card rounded-3xl p-8 text-center space-y-2">
+                        <i data-lucide="map" class="w-8 h-8 text-slate-500 mx-auto"></i>
+                        <p class="text-sm font-semibold text-slate-300">Noch keine Fahrten im gewählten Zeitraum</p>
+                        <p class="text-xs text-slate-500">Starte eine GPS-Fahrt im Cockpit oder trage eine Fahrt manuell nach.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(trip => {
+                const timePart = appState.hideTimesInLog ? '' : ` (${trip.startTime} - ${trip.endTime} Uhr)`;
+                const catColors = {
+                    'Gewerblich': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+                    'Arbeitsweg': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+                    'Privat': 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                };
+                const badgeClass = catColors[trip.category] || catColors['Gewerblich'];
+
+                return `
+                <div class="glass-card rounded-2xl p-4 flex items-center justify-between hover:border-slate-700 transition-all">
+                    <div class="space-y-1 pr-3 overflow-hidden">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-white">${trip.date}${timePart}</span>
+                            <span class="px-2 py-0.5 text-[10px] font-semibold rounded-md border ${badgeClass}">
+                                ${trip.category || 'Gewerblich'}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-300 truncate">${trip.note || 'GPS-Fahrt'}</p>
+                        <p class="font-mono text-[11px] text-slate-400">
+                            Tacho: ${Number(trip.startOdo).toFixed(1)} &rarr; ${Number(trip.endOdo).toFixed(1)} km
+                        </p>
+                    </div>
+                    <div class="flex items-center space-x-3 shrink-0">
+                        <span class="font-mono text-base font-extrabold text-blue-400">
+                            +${Number(trip.distance).toFixed(1)} km
+                        </span>
+                        <button onclick="deleteTrip('${trip.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-800/60 transition-colors" title="Löschen">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        function deleteTrip(id) {
+            appState.trips = appState.trips.filter(t => t.id !== id);
+            saveState();
+            renderLogbook();
+            showToast('Eintrag gelöscht');
+        }
+
+        function clearAllTripsConfirm() {
+            appState.trips = [];
+            saveState();
+            renderLogbook();
+            showToast('Fahrtenbuch geleert');
+        }
+
+        // --- 7. MANUAL TRIP & ODOMETER MODALS ---
+        function openManualTripModal() {
+            document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('manual-distance').value = '';
+            document.getElementById('manual-note').value = '';
+            document.getElementById('manual-trip-modal').classList.remove('hidden');
+        }
+
+        function closeManualTripModal() {
+            document.getElementById('manual-trip-modal').classList.add('hidden');
+        }
+
+        function saveManualTrip() {
+            const date = document.getElementById('manual-date').value;
+            const category = document.getElementById('manual-category').value;
+            const startTime = document.getElementById('manual-start-time').value;
+            const endTime = document.getElementById('manual-end-time').value;
+            const dist = parseFloat(document.getElementById('manual-distance').value);
+            const note = document.getElementById('manual-note').value.trim() || 'Manuelle Eintragung';
+
+            if (!date || isNaN(dist) || dist <= 0) {
+                showToast('Bitte gültige Distanz eingeben', true);
+                return;
+            }
+
+            const startOdo = Math.round(appState.odometer * 10) / 10;
+            const endOdo = Math.round((startOdo + dist) * 10) / 10;
+
+            appState.trips.unshift({
+                id: 'manual_' + Date.now(),
+                date,
+                startTime,
+                endTime,
+                startOdo,
+                endOdo,
+                distance: dist,
+                category,
+                note
+            });
+
+            appState.odometer = endOdo;
+            saveState();
+            renderLogbook();
+            closeManualTripModal();
+            showToast('Fahrt nachgetragen');
+        }
+
+        function openOdometerModal() {
+            switchTab('settings');
+            const input = document.getElementById('settings-odometer-input');
+            input.focus();
+        }
+
+        function saveOdometerFromSettings() {
+            const val = parseFloat(document.getElementById('settings-odometer-input').value);
+            if (!isNaN(val) && val >= 0) {
+                appState.odometer = val;
+                saveState();
+                showToast('Kilometerstand gespeichert');
+            }
+        }
+
+        function setTripCategory(cat) {
+            appState.selectedCategory = cat;
+            saveState();
+            ['Gewerblich', 'Arbeitsweg', 'Privat'].forEach(c => {
+                const btn = document.getElementById('cat-btn-' + c);
+                if (!btn) return;
+                if (c === cat) {
+                    btn.className = 'cat-select-btn py-2 px-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 bg-blue-600/20 border-blue-500 text-blue-300';
+                } else {
+                    btn.className = 'cat-select-btn py-2 px-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 bg-slate-800/60 border-slate-700 text-slate-400';
+                }
+            });
+        }
+
+        function updatePrivacySetting(checked) {
+            appState.hideTimesInLog = checked;
+            saveState();
+            renderLogbook();
+            showToast('Anzeige-Option aktualisiert');
+        }
+
+        function updateGpsParams() {
+            appState.speedThresholdKmh = Number(document.getElementById('settings-speed-threshold').value);
+            appState.autoStopTimeoutSec = Number(document.getElementById('settings-stop-timeout').value);
+            saveState();
+            showToast('GPS-Parameter gespeichert');
+        }
+
+        // --- 8. CSV EXPORT, JSON BACKUP & SELF-HTML DOWNLOAD ---
+        function exportCSV() {
+            if (appState.trips.length === 0) {
+                showToast('Keine Fahrten zum Exportieren', true);
+                return;
+            }
+
+            const headers = appState.hideTimesInLog
+                ? ['Datum', 'Kategorie', 'Tacho Start (km)', 'Tacho Ende (km)', 'Distanz (km)', 'Zweck / Route']
+                : ['Datum', 'Startzeit', 'Endzeit', 'Kategorie', 'Tacho Start (km)', 'Tacho Ende (km)', 'Distanz (km)', 'Zweck / Route'];
+
+            const rows = appState.trips.map(t => {
+                const cleanNote = `"${(t.note || '').replace(/"/g, '""')}"`;
+                if (appState.hideTimesInLog) {
+                    return [t.date, t.category, t.startOdo, t.endOdo, t.distance, cleanNote].join(';');
+                } else {
+                    return [t.date, t.startTime, t.endTime, t.category, t.startOdo, t.endOdo, t.distance, cleanNote].join(';');
+                }
+            });
+
+            const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Fahrtenbuch_Export_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('CSV-Datei heruntergeladen');
+        }
+
+        function exportBackupJson() {
+            const dataStr = JSON.stringify(appState, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `AutoLog_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Backup gespeichert');
+        }
+
+        function importBackupJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported && typeof imported.odometer === 'number') {
+                        appState = { ...appState, ...imported };
+                        saveState();
+                        initUI();
+                        showToast('Backup erfolgreich wiederhergestellt');
+                    }
+                } catch (err) {
+                    showToast('Ungültige Backup-Datei', true);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function downloadSelfAsHtml() {
+            const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Fahrtenbuch.html';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Fahrtenbuch.html heruntergeladen!');
+        }
+
+        // --- 9. UI SYNCHRONIZATION & NAVIGATION ---
+        function updateDashboardUI() {
+            // Odometer
+            if (!isRecording) {
+                document.getElementById('live-odometer').textContent = appState.odometer.toLocaleString('de-DE', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                });
+            }
+            document.getElementById('settings-odometer-input').value = appState.odometer;
+            document.getElementById('auto-gps-toggle').checked = appState.autoGpsEnabled;
+            document.getElementById('schedule-master-enable').checked = appState.scheduleMasterEnabled;
+            document.getElementById('settings-hide-time').checked = appState.hideTimesInLog;
+            document.getElementById('Auto-speed-label').textContent = appState.speedThresholdKmh;
+
+            // Schedule status in header & today card
+            const schedStatus = isCurrentTimeInSchedule();
+            const statusDot = document.getElementById('schedule-status-dot');
+            const statusText = document.getElementById('schedule-status-text');
+
+            statusDot.className = 'w-2 h-2 rounded-full ' + (schedStatus.allowed ? 'bg-emerald-400' : 'bg-amber-400');
+            statusText.innerHTML = `<span class="w-2 h-2 rounded-full ${schedStatus.allowed ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span>${schedStatus.reason}</span>`;
+
+            const todayIdx = new Date().getDay();
+            const todayMeta = DAY_NAMES.find(d => d.id === todayIdx);
+            const todayCfg = appState.schedule[todayIdx];
+            document.getElementById('today-name-label').textContent = todayMeta.full;
+            document.getElementById('today-window-badge').textContent = todayCfg && todayCfg.active 
+                ? `${todayCfg.start} – ${todayCfg.end} Uhr` 
+                : 'Deaktiviert';
+            document.getElementById('today-window-badge').className = todayCfg && todayCfg.active
+                ? 'font-mono font-semibold text-emerald-400'
+                : 'font-mono font-semibold text-slate-500';
+
+            // Monthly & Total Stats
+            const now = new Date();
+            const thisMonthTrips = appState.trips.filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+            const monthKm = thisMonthTrips.reduce((s, t) => s + Number(t.distance || 0), 0);
+            const totalKm = appState.trips.reduce((s, t) => s + Number(t.distance || 0), 0);
+
+            document.getElementById('stat-month-km').textContent = `${monthKm.toFixed(1)} km`;
+            document.getElementById('stat-month-trips').textContent = `${thisMonthTrips.length} Fahrten erfasst`;
+            document.getElementById('stat-total-km').textContent = `${totalKm.toFixed(1)} km`;
+            document.getElementById('stat-total-trips').textContent = `${appState.trips.length} Fahrten im Logbuch`;
+        }
+
+        function switchTab(tabName) {
+            ['dashboard', 'schedule', 'logbook', 'settings'].forEach(t => {
+                const sec = document.getElementById('tab-' + t);
+                const nav = document.getElementById('nav-' + t);
+                if (t === tabName) {
+                    sec.classList.remove('hidden');
+                    nav.className = 'nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-blue-400 bg-blue-500/10 transition-all';
+                } else {
+                    sec.classList.add('hidden');
+                    nav.className = 'nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition-all';
+                }
+            });
+            if (tabName === 'logbook') renderLogbook();
+            if (tabName === 'schedule') renderScheduleConfig();
+        }
+
+        function showToast(msg, isError = false) {
+            const container = document.getElementById('toast-container');
+            const text = document.getElementById('toast-text');
+            const dot = document.getElementById('toast-dot');
+
+            text.textContent = msg;
+            dot.className = 'w-2 h-2 rounded-full ' + (isError ? 'bg-red-500' : 'bg-emerald-400');
+            container.classList.remove('opacity-0', 'translate-y-[-10px]');
+
+            setTimeout(() => {
+                container.classList.add('opacity-0', 'translate-y-[-10px]');
+            }, 2600);
+        }
+
+        function initUI() {
+            loadState();
+            setTripCategory(appState.selectedCategory || 'Gewerblich');
+            updateDashboardUI();
+            renderScheduleConfig();
+            renderLogbook();
+            lucide.createIcons();
+
+            // Check schedule status every 30 seconds
+            setInterval(updateDashboardUI, 30000);
+        }
+
+        window.addEventListener('DOMContentLoaded', initUI);
+    </script>
+</body>
+</html>
+```
